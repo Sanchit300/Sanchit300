@@ -1,0 +1,46 @@
+statefulset:
+  name: "mongodb-statefulset"
+  service: "mongodb-svc"
+  label: "mongo"
+  replicas: "1"
+  image: "mongo:7.0.5"
+  resources:
+    minCPU: 200m
+    minMem: 256Mi
+    maxCPU: 500m
+    maxMem: 1024Mi
+  nodeSelector: "linux"
+
+secret:
+  secretName: "mongodb-secret"
+  
+
+ingress:
+  name: "mongodb-ing"
+  host: "mongo.adanione.cloud"
+  secret: mongodb-tls
+
+pvc:
+  name: "mongodb-pvc"
+
+pvolume:
+  name: "mongodb-persistentvolume"
+  size: "45Gi"
+  vmode: "Filesystem"
+  amode: "ReadWriteOnce"
+  mountpath: "/mnt/data"
+
+service:
+  name: "mongodb-svc"
+  namespace: "mongo-db"
+  type: "LoadBalancer"
+  selector:
+    app: "mongo"
+  port: 27017
+  targetPort: 27017
+
+storageClass:
+  name: "mongodb-storageclass"
+  provisioner: "disk.csi.azure.com" 
+  binding: "WaitForFirstConsumer"
+  reclaimPolicy: "Retain"
