@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.deployment.name }}
+  namespace: {{ .Values.deployment.namespace }}
+  labels:
+    app: {{ .Values.deployment.label }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.deployment.label }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.deployment.label }}
+    spec:
+      containers:
+        - name: mongodb-express
+          image: mongo-express
+          ports:
+            - containerPort: 8081
+          env:
+            - name: ME_CONFIG_MONGODB_ADMINUSERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: MONGO_ROOT_USERNAME
+            - name: ME_CONFIG_MONGODB_ADMINPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: MONGO_ROOT_PASSWORD
+            - name: ME_CONFIG_MONGODB_SERVER
+              value: {{ .Values.dbString }}
+            - name: ME_CONFIG_BASICAUTH_USERNAME_FILE
+              value: /etc/express-config/MONGO_EXPRESS_USER
+            - name: ME_CONFIG_BASICAUTH_PASSWORD_FILE
+              value: /etc/express-config/MONGO_EXPRESS_PASSWORD
+          volumeMounts:
+            - name: express-config
+              mountPath: /etc/express-config
+          resources:
+            limits:
+              cpu: {{ .Values.deployment.resources.maxCPU }}
+              memory: {{ .Values.deployment.resources.maxMEM }}
+            requests:
+              cpu: {{ .Values.deployment.resources.minCPU }}
+              memory: {{ .Values.deployment.resources.minMEM }}
+      volumes:
+        - name: express-config
+          secret:
+            secretName: "mongodb-secret"
+            items:
+              - key: MONGO_EXPRESS_USER
+                path: MONGO_EXPRESS_USER
+                mode: 0444
+              - key: MONGO_EXPRESS_PASSWORD
+                path: MONGO_EXPRESS_PASSWORD
+                mode: 0444

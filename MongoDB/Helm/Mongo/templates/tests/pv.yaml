@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+    name: {{ .Values.pvolume.name }}
+spec:
+  capacity:
+    storage: {{ .Values.pvolume.size }}
+  volumeMode: {{ .Values.pvolume.vmode }}
+  accessModes:
+    - {{ .Values.pvolume.amode }}
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ .Values.storageClass.name }}
+  csi:
+    driver: disk.csi.azure.com
+    volumeHandle: /subscriptions/b4fb9e24-4084-465c-932b-7cdf625f6ef8/resourceGroups/MC_adl-superapp-aks-dev-rg_adl-supperapp-dev-aks_centralindia/providers/Microsoft.Compute/disks/mongodb-pvc
+    volumeAttributes:
+      fsType: ext4
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: size
+          operator: In
+          values:
+            - large

@@ -1,0 +1,27 @@
+deployment:
+  name: "mongo-express-deployment"
+  namespace: "mongo-db"
+  label: "mongo-express"
+  service: "mongo-express-svc"
+  resources:
+    minCPU: 200m
+    minMem: 256Mi
+    maxCPU: 500m
+    maxMem: 768Mi
+
+service:
+  name: "mongo-express-svc"
+  namespace: "mongo-db"
+  type: "ClusterIP"
+  selector:
+    app: "mongo-express"
+  port: 8081
+  targetPort: 8081
+
+ingress:
+  name: "mongo-express-ing"
+  host: "mongo-express.adanione.cloud"
+  secret: "mongo-ssl"
+  port: 8081
+
+dbString: "mongodb-svc"

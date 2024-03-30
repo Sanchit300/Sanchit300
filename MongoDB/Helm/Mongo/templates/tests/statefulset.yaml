@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Values.statefulset.name }}
+spec:
+  serviceName: {{ .Values.service.name }}
+  replicas: {{ .Values.statefulset.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.statefulset.label }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.statefulset.label }}
+    spec:
+      containers:
+      - name: mongodb
+        image: {{ .Values.statefulset.image }}
+        env:
+          - name: MONGO_INITDB_ROOT_USERNAME_FILE
+            value: /etc/mongo-config/admin/MONGO_ROOT_USERNAME
+          - name: MONGO_INITDB_ROOT_PASSWORD_FILE
+            value: /etc/mongo-config/admin/MONGO_ROOT_PASSWORD
+        volumeMounts:
+        - name: mongo-config ### change name
+          mountPath: /etc/mongo-config
+          readOnly: true
+        - name: mongodb-scripts
+          mountPath: /docker-entrypoint-initdb.d
+          readOnly: true
+        - name: mongodb-configmap
+          mountPath: /config
+          readOnly: true
+        - name: {{ .Values.pvolume.name }}
+          mountPath: /data/db
+        resources:
+          limits:
+            cpu: {{ .Values.statefulset.resources.maxCPU }}
+            memory: {{ .Values.statefulset.resources.maxMEM }}
+          requests:
+            cpu: {{ .Values.statefulset.resources.minCPU }}
+            memory: {{ .Values.statefulset.resources.minMEM }}
+      nodeSelector:
+        kubernetes.io/os: {{ .Values.statefulset.nodeSelector }}
+      volumes:
+      - name: mongo-config
+        secret:
+          secretName: {{ .Values.secret.secretName }}
+          items:
+          - key: MONGO_ROOT_USERNAME
+            path: admin/MONGO_ROOT_USERNAME
+            mode: 0444
+          - key: MONGO_ROOT_PASSWORD
+            path: admin/MONGO_ROOT_PASSWORD
+            mode: 0444
+          - key: MONGO_USERNAME
+            path: MONGO_USERNAME
+            mode: 0444
+          - key: MONGO_PASSWORD
+            path: MONGO_PASSWORD
+            mode: 0444
+          - key: MONGO_USERS_LIST
+            path: MONGO_USERS_LIST
+            mode: 0444
+      - name: mongodb-scripts
+        configMap:
+          name: mongodb-configmap
+          items:
+          - key: ensure-users.js
+            path: ensure-users.js
+      - name: mongodb-configmap
+        configMap:
+          name: mongodb-configmap
+          items:
+          - key: mongo.conf
+            path: mongo.conf
+      - name: {{ .Values.pvolume.name }}
+        persistentVolumeClaim:
+          claimName: {{ .Values.pvc.name }}
