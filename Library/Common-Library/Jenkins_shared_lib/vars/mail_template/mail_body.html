@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+.button {
+  border: none;
+  color: white;
+  padding: 16px 32px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+  margin: 4px 2px;
+  transition-duration: 0.4s;
+  cursor: pointer;
+}
+
+.button1 {
+  background-color: white;
+  color: black;
+  border: 2px solid #4CAF50;
+}
+
+.button1:hover {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.button2 {
+  background-color: white;
+  color: black;
+  border: 2px solid #008CBA;
+}
+
+.button2:hover {
+  background-color: #008CBA;
+  color: white;
+}
+
+</style>
+</head>
+<body>
+<!-- Followin are the placeholders and will be replaced in CD pipeline:
+    curr_build_result
+    curr_job_name
+    curr_build_url
+    prm_env
+    prm_build_url -->
+<h1><curr_build_result>: Job <curr_job_name> </h1>
+<h3>More info at: <curr_build_url> </h3>
+<p>Promote this build to <prm_env>?</p>
+
+<a href='<prm_build_url>' >
+    <button class="button button1">Deploy</button>
+</a>
+
+</body>
+</html>

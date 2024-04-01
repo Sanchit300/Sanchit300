@@ -1,0 +1,47 @@
+#!/usr/bin/env groovy
+
+def call(String job_name, String highThreshold, String mediumThreshold="100", String lowThreshold="100") {
+    withCredentials([usernamePassword(credentialsId: '53bc1446-11fc-42a6-a4d3-53d8d9a8be55', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
+        step([$class: 'CxScanBuilder',
+        comment: '',
+        configAsCode: true,
+        credentialsId: '',
+        customFields: '',
+        excludeFolders: 'cicd',
+        exclusionsSetting: 'job',
+        failBuildOnNewResults: false,
+        failBuildOnNewSeverity: 'HIGH',
+        filterPattern: '''!**/_cvs/**/*, !**/.svn/**/*, !**/.hg/**/*, !**/.git/**/*, !**/.bzr/**/*,
+        !**/.gitgnore/**/*, !**/.gradle/**/*, !**/.checkstyle/**/*, !**/.classpath/**/*, !**/bin/**/*,
+        !**/obj/**/*, !**/backup/**/*, !**/.idea/**/*, !**/*.DS_Store, !**/*.ipr, !**/*.iws,
+        !**/*.bak, !**/*.tmp, !**/*.aac, !**/*.aif, !**/*.iff, !**/*.m3u, !**/*.mid, !**/*.mp3,
+        !**/*.mpa, !**/*.ra, !**/*.wav, !**/*.wma, !**/*.3g2, !**/*.3gp, !**/*.asf, !**/*.asx,
+        !**/*.avi, !**/*.flv, !**/*.mov, !**/*.mp4, !**/*.mpg, !**/*.rm, !**/*.swf, !**/*.vob,
+        !**/*.wmv, !**/*.bmp, !**/*.gif, !**/*.jpg, !**/*.png, !**/*.psd, !**/*.tif, !**/*.swf,
+        !**/*.jar, !**/*.zip, !**/*.rar, !**/*.exe, !**/*.dll, !**/*.pdb, !**/*.7z, !**/*.gz,
+        !**/*.tar.gz, !**/*.tar, !**/*.gz, !**/*.ahtm, !**/*.ahtml, !**/*.fhtml, !**/*.hdm,
+        !**/*.hdml, !**/*.hsql, !**/*.ht, !**/*.hta, !**/*.htc, !**/*.htd, !**/*.war, !**/*.ear,
+        !**/*.htmls, !**/*.ihtml, !**/*.mht, !**/*.mhtm, !**/*.mhtml, !**/*.ssi, !**/*.stm,
+        !**/*.bin,!**/*.lock,!**/*.svg,!**/*.obj,
+        !**/*.stml, !**/*.ttml, !**/*.txn, !**/*.xhtm, !**/*.xhtml, !**/*.class, !**/*.iml, !Checkmarx/Reports/*.*,
+        !OSADependencies.json, !**/node_modules/**/*, !**/*.yml''',
+        fullScanCycle: 10,
+        groupId: '2',
+        password: '${PASS}',
+        postScanActionId: 0,
+        preset: '36',
+        projectName: "ADL_AIRPORT_DROIDS",
+        sastEnabled: true,
+        serverUrl: 'https://checkmarx.adanione.cloud/',
+        sourceEncoding: '6',
+        username: '',
+        vulnerabilityThresholdResult: 'FAILURE',
+        waitForResultsEnabled: true,
+        highThreshold: "${highThreshold}",
+        mediumThreshold: "${mediumThreshold}",
+        lowThreshold: "${lowThreshold}",
+        vulnerabilityThresholdEnabled: true,
+        hideDebugLogs: true
+        ])
+    }
+}
