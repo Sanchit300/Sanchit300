@@ -1,0 +1,13 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.ingress.name }}
+  annotations:
+  {{- .Values.ingress.annotations | toYaml | nindent 4 }}
+spec:
+  tls:
+    - secretName: {{ .Values.ingress.secret }}
+  rules:
+  {{- .Values.ingress.rules | toYaml | nindent 4 }}
+{{- end }}

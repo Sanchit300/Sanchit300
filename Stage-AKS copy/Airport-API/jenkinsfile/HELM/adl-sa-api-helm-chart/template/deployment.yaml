@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.deployment.name }}
+  {{ if .Values.deployment.namespace}}namespace: {{ .Values.deployment.namespace }}
+  {{- end }}
+  labels:
+  {{- .Values.deployment.labels | toYaml | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+    {{- .Values.deployment.selector.matchLabels | toYaml | nindent 8 }}
+  strategy:
+    rollingUpdate:
+      maxSurge: {{ .Values.deployment.maxSurge }}
+      maxUnavailable: {{ .Values.deployment.maxUnavailable }}
+    type: RollingUpdate
+  replicas: {{ .Values.deployment.replicas }}
+  template:
+    metadata:
+      annotations:
+        rollme: {{ randAlphaNum 5 | quote }}
+      labels:
+      {{- .Values.deployment.podLabels | toYaml | nindent 8 }}
+    spec:
+      {{ if .Values.deployment.tolerations }}tolerations: 
+        {{- range .Values.deployment.tolerations }}
+        - effect: {{ .effect }}
+          key: {{ .key }}
+          operator: {{ .operator }}
+          value: {{- if eq (printf "%T" .value) "bool" }}
+                   {{ .value }}
+                   {{- else }}
+                   {{ .value | quote }}
+                   {{- end }}
+        {{- end }}
+      {{- end }}
+      nodeSelector:
+        kubernetes.io/os: {{ .Values.deployment.nodeSelector }}
+      volumes:
+         - name: {{ .Values.volumes.name }}
+           csi:  
+             driver: {{ .Values.volumes.csi.driver }}
+             readOnly: true
+             volumeAttributes:
+               secretProviderClass: {{ .Values.volumes.csi.volumeAttributes.secretProviderClass }}
+      containers:
+      - name: {{ .Values.deployment.app }}
+        image: {{ .Values.deployment.image }}
+        {{ if .Values.deployment.command }}command: {{- range .Values.deployment.command }} 
+              - {{ . | quote }}{{- end }}{{ end }}
+        {{ if .Values.deployment.args }}args: {{- range .Values.deployment.args }} 
+              - {{ . | quote }}{{- end }}{{ end }}
+        {{ if .Values.deployment.env }}env: {{- range $name, $value := .Values.deployment.env }}
+          - name: {{ $name }}
+            value: {{- if eq (printf "%T" $value) "int" }}
+                   {{ $value }}
+                   {{- else }}
+                   {{ $value | quote }}
+                   {{- end }}
+          {{- end }}
+        {{- end }}
+        ports:
+          - containerPort: 80
+        volumeMounts:
+        - {{ if .Values.volumeMounts.name }}name: {{ .Values.volumeMounts.name }}
+          {{- end }}
+          {{ if .Values.volumeMounts.mountPath }}mountPath: {{ .Values.volumeMounts.mountPath }}
+          {{- end }}
+          {{ if .Values.volumeMounts.subPath }}subPath: {{ .Values.volumeMounts.subPath }}
+          {{- end }}
+        resources:
+          requests:
+            cpu: {{ .Values.deployment.resources.requests.cpu }}
+            memory: {{ .Values.deployment.resources.requests.memory }}
+          limits:
+            cpu: {{ .Values.deployment.resources.limit.cpu }}
+            memory: {{ .Values.deployment.resources.limit.memory }}
+        {{ if .Values.deployment.readinessProbe }}readinessProbe:
+          httpGet:
+            path: {{ .Values.deployment.readinessProbe.path }}
+            port: {{ .Values.deployment.readinessProbe.port }}
+          initialDelaySeconds: {{ .Values.deployment.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.deployment.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.deployment.readinessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.deployment.readinessProbe.failureThreshold }}
+        {{- end }}

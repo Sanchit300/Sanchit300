@@ -1,0 +1,148 @@
+//common-Library
+@Library('jenkins-new-common-library')_
+node('linux-agent13'){
+    //properties([pipelineTriggers([pollSCM('H/5 * * * *')])])
+    currentBuild.displayName="2.0."+currentBuild.number
+    def $APP="dutyfree"
+    def $APP_DIR="$WORKSPACE/application/ADL.AIRPORT.Application.DutyFreeService/"
+    def $SONAR_PROJECT_KEY="adl-sa-api-dutyfree"
+    def $SONAR_EXCLUSIONS="cicd"
+    def $UNIT_TEST_PATH="$WORKSPACE/application/UnitTest.DutyFree/"
+    def $DOCKERFILE_PATH="$WORKSPACE/cicd/Stage-AKS/Airport-API/Dockerfiles/Dockerfile-dutyfree-api"
+    def $IMAGE_TAG="adlstageacr.azurecr.io/adl-sa-api-dutyfree:${currentBuild.displayName}"
+    def $TEST_PORT="30003"
+    def $TEST_URL="http://localhost:30003/swagger/index.html"
+    def $CICD_REPO = "git@github.com:AdaniDigitalLabs/ADL-AKS-DevOps-CI-CD.git"
+    def $GIT_CREDS_APP="jenkins"
+    def $CICD_REPO_BRANCH = "master"
+    //def $GIT_CREDS =
+    def $CICD_REPO_DEST = "cicd"
+    def $APP_REPO = "git@github.com:AdaniDigitalLabs/adl_dutyfree_api.git"
+    def $APP_REPO_BRANCH= "release_order_restructure"
+   def $GIT_CREDS="jenkins-private-key"
+    // TO-DO: Set to false to omit unit tests
+    def $RUN_UNIT_TESTS=false
+    // TO-DO: Set to false to omit Sonar Scan
+    def $RUN_SONAR_SCAN = false
+    // TO-DO: to run Checkmarx scan, change RUN_CHECKMARX_SACN to true and supply value for HIGH_THRESHOLD
+    
+    
+    def $INC_PAYLOAD='{"u_caller": "API Test EndUser", "u_impact": 1, "u_urgency": 4, "u_description": "'+JOB_NAME+':'+currentBuild.displayName+' failed. Refer '+BUILD_URL+' for more information.", "u_classification_type":"ADL-Application", "u_category":"ADL-Airport-FNB", "u_subcategory":"ADL-Airport-FNB-Web-Application", "u_integration_source":"Jenkins","u_short_description":"Job: '+JOB_NAME+':'+currentBuild.displayName+' failed"}'
+    def $QA_AUTOMATION_SUITE= false
+    def $QA_REPO= "git@github.com:AdaniDigitalLabs/API_Airport_QA.git"
+    def $QA_REPO_BRANCH= "DutyFree"
+    def $QA_REPO_DEST= "automation"
+
+    
+    try {
+
+        stage('Checkout'){
+            /**
+            Definition: def call(String repo_url, String branch, String dest_directory, String credentialsId)
+            Parameters:
+                * repo_url: Git repo URL
+                * branch: name of Git branch
+                * dest_directory: path on Jenkins workspace where Git checkout will place content. Supply "." to checkout in current direcoty
+                * credentialsId: credentials ID to connect to GitHub
+            */
+            //Checkout DevOps files into ./cicd directory
+            gitCheckout($CICD_REPO, $CICD_REPO_BRANCH, $CICD_REPO_DEST, $GIT_CREDS)
+
+            // Read properties file
+            properties = readProperties file: './cicd/Stage-AKS/Airport-API/pipeline.properties'
+
+            //Checkout application code into ./application directory
+            GIT_VARS=gitCheckout($APP_REPO, "${APP_REPO_BRANCH}", "${properties.APP_REPO_DEST}", $GIT_CREDS, true)
+            gitCheckout($QA_REPO, $QA_REPO_BRANCH, $QA_REPO_DEST, $GIT_CREDS)
+        }
+        if($QA_AUTOMATION_SUITE){
+            QaAutomationSuite($QA_REPO_BRANCH)
+        }
+
+        
+
+        if($RUN_SONAR_SCAN){
+            /**
+            Definition: dotNetBuildAndSonarScan(String app, String sonar_instance, String application_path, String sonarqube_project_key, String exclusions, Boolean run_unit_tests, String unit_test_path="NA")
+            Parameters:
+                * app: name of micro service
+                * sonar_instance: name of Sonar server configured in Jenkins
+                * application_path: path of application to run dotnet commands
+                * sonarqube_project_key: SonarQube project key
+                * exclusions: comma separated list of paths to be excluded from Sonar scan
+                * run_unit_tests: boolean value indicating if unit tests will be executed
+                * unit_test_path: path to unit tests
+            */
+            dotNetBuildAndSonarScan($APP, "${properties.SONAR_INSTANCE}", $APP_DIR, $SONAR_PROJECT_KEY, $SONAR_EXCLUSIONS, $RUN_UNIT_TESTS, $UNIT_TEST_PATH)
+        }
+        else{
+            /**
+            Definition: dotNetBuild(String app, String application_path)
+            Parameters:
+                * app: name of micro service            
+                * application_path: path of application to run dotnet commands
+            */
+            dotNetBuild($APP, $APP_DIR, $RUN_UNIT_TESTS, $UNIT_TEST_PATH)
+        }
+        
+        /**
+        Definition: buildAndTestImage(String app, String image_tag, String dockerfile_path, String test_port,String test_url, String context)
+        Parameters:
+            * app: name of micro service
+            * image_tag: Image tag to be pushed to GCR
+            * dockerfile_path: Dockerfile path
+            * test_port: port number on local machine for test container
+            * test_url: URL to test the application deployed in test container
+            * context: path to be supplied to docker build command. 
+        */
+        buildAndNoTest($APP, $IMAGE_TAG, $DOCKERFILE_PATH, $TEST_PORT, $TEST_URL, "${properties.CONTEXT}")
+        
+        /**
+        Definition: dockerPush(String credentialsId, String url, String image_tag) 
+        Parameters:
+            * credentialsId: Credentials used to push image to GCR
+            * url: URL for GCR, eg: http://gcr.io
+            * image_tag: image tag to be pushed to GCR
+        */
+        dockerPushStage("${properties.credentialsId}",$IMAGE_TAG)   
+
+        stage ('Starting CD job') {
+            build job: 'ADL-SA-API-DUTYFREE-STAGE-CD', parameters: [[$class: 'StringParameterValue', name: 'IMAGE_TAG', value: $IMAGE_TAG], [$class: 'StringParameterValue', name: 'buildUser', value: currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause').userName[0]]]
+        }
+
+        //Printing build related information
+        echo """
+        Git repo: ${GIT_VARS.GIT_URL}
+        Git branch: ${GIT_VARS.GIT_BRANCH}
+        Git commit ID: ${GIT_VARS.GIT_COMMIT}
+        """
+        currentBuild.result = 'SUCCESS'
+    }
+    catch (e){
+        echo "Some error(s) occured during execution!"
+        def logContent = Jenkins.getInstance()
+            .getItemByFullName(env.JOB_NAME)
+            .getBuildByNumber(
+                Integer.parseInt(env.BUILD_NUMBER))
+            .logFile.text
+        // copy the log in the job's own workspace
+        writeFile file: "build.log", text: logContent
+        sh "echo 'Build failed due to:' >> build.log"
+        sh "echo '${e}' >> build.log"
+
+        //Creating ServiceNow incident ticket...
+        withCredentials([usernamePassword(credentialsId: 'snow_creds', passwordVariable: 'SNOW_PWD', usernameVariable: 'SNOW_USER')]) {
+            def $SYS_ID=createIncident("${properties.SNOW_URL}", "${SNOW_USER}", "${SNOW_PWD}", $INC_PAYLOAD)
+            attachLogToIncident("${properties.SNOW_ATTACHMENT_URL}", "${SNOW_USER}", "${SNOW_PWD}", $SYS_ID, "${WORKSPACE}/build.log" )
+        }
+        currentBuild.result = 'FAILURE'
+        // Re-throwing error to make sure the build fails
+        throw e
+    }
+    finally{
+        sh " sudo rm -rf "+"${properties.APP_REPO_DEST}"
+    }
+
+    // Invoke deploy job
+    //invokeDeployJob("adl-sa-api-cd-dutyfree",$IMAGE_TAG)
+}
