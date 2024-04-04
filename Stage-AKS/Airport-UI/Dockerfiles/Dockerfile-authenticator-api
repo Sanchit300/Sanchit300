@@ -1,0 +1,10 @@
+// Build runtime image
+#FROM mcr.microsoft.com/dotnet/aspnet:8.0
+FROM mcr.microsoft.com/dotnet/aspnet:6.0.27
+// Install the Arial fonts 
+RUN sed -i'.bak' 's/$/ contrib/' /etc/apt/sources.list
+RUN apt-get update; apt-get install -y ttf-mscorefonts-installer fontconfig
+WORKDIR /app
+//  Copy everything
+COPY ./application/src/ADL.Authenticator/Application/ADL.Authenticator.API/bin/Release/net6.0/ ./
+CMD ["dotnet", "ADL.Authenticator.API.dll"]
