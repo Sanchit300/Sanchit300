@@ -1,0 +1,148 @@
+@Library('jenkins-new-common-library')_
+node('Linux-Agent-Prod || Agent-Vinod') {
+    parameters {
+        booleanParam (defaultValue: true,name: 'NETSPARKER_CHECK')
+        string 'IMAGE_TAG'
+        string 'Azure_BugID'
+        } 
+    def (acr,tag) = "${IMAGE_TAG}".split('/')
+    currentBuild.displayName="${tag}"
+    def $CICD_REPO = "git@github.com:AdaniDigitalLabs/ADL-AKS-DevOps-CI-CD.git"
+    def $GIT_CREDS_APP="jenkins"
+    def $CICD_REPO_BRANCH = "master"
+    def $CICD_REPO_DEST = "cicd"
+    def $GIT_CREDS="jenkins-private-key"
+    def $APP="bill-payment"
+    def $VALUES_FILE="./cicd/Stage-AKS/Airport-API/Helm/stage-values/bill-payment-values.yaml"
+    def $INGRESS_VALUES_FILE="./cicd/Stage-AKS/Airport-API/Helm/adl-sa-api-common/values.yaml"
+    def $INC_PAYLOAD='{"u_caller": "API Test EndUser", "u_impact": 1, "u_urgency": 4, "u_description": "'+JOB_NAME+':'+currentBuild.displayName+' failed. Refer '+BUILD_URL+' for more information.", "u_classification_type":"ADL-Application", "u_category":"ADL-Airport-FNB", "u_subcategory":"ADL-Airport-FNB-Web-Application", "u_integration_source":"Jenkins","u_short_description":"Job: '+JOB_NAME+':'+currentBuild.displayName+' failed"}'
+    def $SNOW_URL="https://adanidev.service-now.com/api/now/import/u_adani_generic_incident_creation_import"
+    def $NETSPARKER_CHECK="${NETSPARKER_CHECK}"
+    def $recepient_mail="QALeads@adani.com;ADL-DevOps@adani.com;AlNisha.Saifi@adani.com;Chirag.Mendiratta@adani.com;Deepali.Sharma@adani.com;Kaustubh.Singh@adani.com;Kiran.Parashar@adani.com;Minu.Sharma@adani.com;Neha.Mahajan1@adani.com;Palak.Kapoor@adani.com;PraveenKumar.Gupta@adani.com;Preeti.Garg@adani.com;Rahul.Negi@adani.com;Rajdeep.Gupta@adani.com;SurendraKumar.Savita@adani.com;Vinay.Kanojia@adani.com"
+    def $recepient_mail_owner="tarun.kumar1@adani.com;praveenkumar.gupta@adani.com;kaustubh.singh@adani.com;ADL-DevOps@adani.com"
+    
+    def $API_ID="bill-payment-api"
+    def $SWAGGER_DIR="$WORKSPACE/swagger.json"
+    def $API_URL_SUFFIX="bill-payment"
+    def $WEB_SERVICE_URL="https://bill-payment.uat.adanione.com"
+    def $DISPLAY_NAME="Bill_Payment_API"
+    def $SWAGGER_URL = "https://bill-payment.uat.adanione.com/openapi-json"
+    def $SWAGGER_BLOB = "-"
+    
+    try {
+        StagingApprovalmail($recepient_mail)
+        stage('Checkout'){
+            /**
+            Definition: def call(String repo_url, String branch, String dest_directory, String credentialsId)
+            Parameters:
+                * repo_url: Git repo URL
+                * branch: name of Git branch
+                * dest_directory: path on Jenkins workspace where Git checkout will place content. Supply "." to checkout in current direcoty
+                * credentialsId: credentials ID to connect to GitHub
+            */
+            //Checkout DevOps files into ./cicd directory
+            gitCheckout($CICD_REPO, $CICD_REPO_BRANCH, $CICD_REPO_DEST, $GIT_CREDS)
+
+            // Read properties file
+            properties = readProperties file: './cicd/Stage-AKS/Airport-API/pipeline-stage.properties'
+        }
+
+        //Download old swagger
+        DownloadOldSwagger($SWAGGER_URL)
+
+        def deploymentStatus = false
+        def $targetTimestamp = new Date().format("yyyy-MM-dd'T'HH:mm:ss'Z'", TimeZone.getTimeZone('UTC'))
+
+        /**
+        Definition: deployHelmChart("${properties.credentialsId}", "${properties.subscriptionId}", "${properties.resourceGroup}", "${properties.clusterName}", $APP, "${properties.chart_path}", $VALUES_FILE, "${IMAGE_TAG}")
+        Parameters:
+            * credentialsId: credentials ID to connect to AKS
+            * cluster_name: name of AKS Cluster
+            * subscriptionId: AKS subscription ID
+            * zone: Azure Zone in which GKE Cluster is deployed
+            * app: name of app
+            * chart_path: path to helm chart
+            * values_file: path to the values file
+            * image_tag: image tag to be deployed
+            * ingress_values_file: path to ingress values file
+        */
+        
+        // deployHelmChart("${properties.credentialsId}", "${properties.subscriptionId}", "${properties.resourceGroup}", "${properties.clusterName}", $APP, "${properties.chart_path}", $VALUES_FILE, "${IMAGE_TAG}","${properties.AIRPORT_NAMESPACE}")
+        deployHelmCharts("${properties.credentialsId}","${properties.subscriptionId}","${properties.resourceGroup}","${properties.clusterName}",$APP,"${properties.chart_path}",$VALUES_FILE,"${IMAGE_TAG}","${properties.AIRPORT_NAMESPACE}")
+        
+        stage('Updating ingress'){
+            sh "helm upgrade --install \"airport-api-bill-payment-ingress\"  ./cicd/Stage-AKS/Airport-API/Helm/adl-sa-api-ingress-chart/ --values=./cicd/Stage-AKS/Airport-API/Helm/stage-values/bill-payment-values.yaml  --namespace=${properties.AIRPORT_NAMESPACE} "
+        }
+        
+        //Check Deployments
+        stage('Check Deployment'){
+            deploymentStatus = CheckPods("airport-api", "bill-payment-deployment", "bill-payment", $targetTimestamp, "${properties.subscriptionId}", "${properties.credentialsId}")
+        }
+
+        //Update Swagger
+        stage('Swagger Update'){
+            if(deploymentStatus){
+                def isSwaggerUpdated = swaggerUpdateSave("${properties.subscriptionId}", "${properties.resourceGroupSwagger}", "${properties.credentialsId}", "${properties.API_Name}", $API_ID, params.IMAGE_TAG, $API_URL_SUFFIX, $WEB_SERVICE_URL, $DISPLAY_NAME, $SWAGGER_URL)
+                if(isSwaggerUpdated){
+                    $SWAGGER_BLOB = swaggerSave("STAGE", "azadldevemailimagesa", "swagger", "${properties.blobSubscriptionId}", params.IMAGE_TAG)
+                }
+            }else{
+                echo "Swagger not updated."
+            }
+        }
+        
+         if($NETSPARKER_CHECK){
+            stage('NETSPARKER SCAN') 
+            withCredentials([string(credentialsId: 'Netsparker-api-key', variable: 'API_KEY')]){
+            
+                sh '''
+        
+                    curl -X POST \
+                        -H "Authorization: Basic $API_KEY" \
+                        -H "Content-Type: application/json" \
+                        -d '{
+                            "ProfileName": "bill-payment-api",
+                            "TargetUri": "https://www.uat.adanione.com/api/bill-payment"
+                            }' \
+                        https://netsparker.adanione.cloud/api/1.0/scans/newwithprofile
+                '''
+            
+            }
+        }
+
+        /**
+        Definition: //sendMailToApprover(String jenkins_host, String job_name, String promote_to_env, String image_tag, String recepient_mail)
+        Parameters:
+            * jenkins_host: hostname of Jenkins instance, eg: cicd-jen.adanione.cloud:8080
+            * job_name: name of job to be executed as promotion
+            * promote_to_env: environment to promote build to
+            * image_tag: docker image to be promoted to higher environment
+            * recepient_mail: recepient mail address
+        */
+        ////sendMailToApprover("${properties.JENKINS_HOST}", "ADL-SA-API-CO-BRANDED-CARD-PROD-CD", "PROD" ,"${IMAGE_TAG}", "${properties.APPROVER_MAIL}")
+        currentBuild.result = 'SUCCESS'
+    }
+
+    catch (e){
+        echo "Some error(s) occured during execution!"
+        def logContent = Jenkins.getInstance()
+            .getItemByFullName(env.JOB_NAME)
+            .getBuildByNumber(
+                Integer.parseInt(env.BUILD_NUMBER))
+            .logFile.text
+        // copy the log in the job's own workspace
+        writeFile file: "build.log", text: logContent
+        sh "echo 'Build failed due to:' >> build.log"
+        sh "echo '${e}' >> build.log"
+        
+        currentBuild.result = 'FAILURE'
+        StagingsendStatusMailFromCD($recepient_mail_owner)
+        // Re-throwing error to make sure the build fails
+        throw e
+    }
+
+    finally{
+        StagingsendStatusMailFromCD($recepient_mail_owner)
+        envkeeperAPI("STAGE", "NodeJS", "Bill-Payment", "API", "az-adl-sa-stage-keyvault", "adl-sa-stage-bill-payment-env", $SWAGGER_BLOB)
+    }
+}

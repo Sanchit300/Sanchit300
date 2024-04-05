@@ -1,0 +1,32 @@
+# Base image
+# Digest: sha256:b8a9ad50d8833a2aede22170a517e64c79776e9145811d7f6649bb123fb4e258
+#FROM node:18.16.0-bullseye-slim
+FROM node:20.11.0-bullseye-slim
+
+# Optimize Node.js tooling for production
+ENV NODE_ENV production
+
+# Install pm2
+#RUN npm install pm2 -g
+
+# Create app directory
+WORKDIR /usr/src/app
+
+# Copy files
+COPY --chown=node:node dist /usr/src/app
+
+# Install app dependencies
+# RUN yarn install
+
+# Don't run nodejs app as root
+# USER node
+
+#Exposing the port
+EXPOSE 3007
+
+# Run application
+#CMD ["pm2-runtime", "pm2-process.json"]
+CMD ["node", "main.js"]
+
+
+
